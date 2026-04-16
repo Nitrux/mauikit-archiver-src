@@ -221,6 +221,8 @@ bool CompressedFile::addFile(const QString &url, const QString &path)
 
 bool CompressedFile::extractFiles(const QStringList &urls, const QString &where)
 {
+    Q_UNUSED(urls);
+    Q_UNUSED(where);
     return false;
 }
 
@@ -240,6 +242,8 @@ bool CompressedFile::compress(const QStringList &files, const QUrl &where, const
 
 bool CompressedFile::extractFile(const QString &url, const QString &where)
 {
+    Q_UNUSED(url);
+    Q_UNUSED(where);
     return false;
 }
 
