@@ -19,6 +19,7 @@ FM.FileListingDialog
       *@brief The preferred location where the final archive file will be saved at
       */
     property string destination : _compressor.defaultSaveDir
+    property url destinationUrl
 
     /**
       *@brief The type fo archive. The possible options are:
@@ -30,8 +31,10 @@ FM.FileListingDialog
     property int type : 0
     onTypeChanged:
     {
-        control.checkExistance(_archiveNameField.text, control.normalizePathInput(_locationField.text), control.extensionName(control.type))
+        control.checkExistance(_archiveNameField.text, control.destinationUrl, control.extensionName(control.type))
     }
+
+    onDestinationChanged: destinationUrl = control.ensureDestinationUrl(destination)
 
     persistent: false
 
@@ -58,11 +61,11 @@ FM.FileListingDialog
 
                 if(!ok)
                 {
-                    control.alert(i18n("Some error occured. Maybe current user does not have permission for writing in this directory."))
+                    control.alert(i18n("Some error occured. Maybe current user does not have permission for writing in this directory."), 2)
                     return
                 }else
                 {
-                    control.done(control.urls, control.normalizePathInput(_locationField.text), _archiveNameField.text, control.type)
+                    control.done(control.urls, control.destinationUrl.toString(), _archiveNameField.text, control.type)
                     //            control.close()
                 }
             }
@@ -107,7 +110,7 @@ FM.FileListingDialog
 
         onTextChanged:
         {
-            control.checkExistance(text, control.normalizePathInput(_locationField.text), control.extensionName(control.type))
+            control.checkExistance(text, control.destinationUrl, control.extensionName(control.type))
         }
     }
 
@@ -117,11 +120,12 @@ FM.FileListingDialog
         Layout.fillWidth: true
         Maui.Controls.title: i18n("Destination")
         Maui.Controls.subtitle: i18n("The final location of the new archive")
-        text: control.displayPath(control.destination)
+        text: control.displayPath(control.destinationUrl)
 
         onTextChanged:
         {
-            control.checkExistance(_archiveNameField.text, control.normalizePathInput(text), control.extensionName(control.type))
+            control.destinationUrl = control.ensureDestinationUrl(text)
+            control.checkExistance(_archiveNameField.text, control.destinationUrl, control.extensionName(control.type))
         }
     }
 
@@ -159,7 +163,9 @@ FM.FileListingDialog
 
     function checkExistance(name, path, extension)
     {
-        if(!FM.FM.fileExists(path))
+        const destinationPath = control.ensureDestinationUrl(path)
+
+        if(!FM.FM.fileExists(destinationPath))
         {
             control.alert(i18n("Base location does not exists. Try with a different location."), 2)
             return false
@@ -171,8 +177,8 @@ FM.FileListingDialog
             return false
         }
 
-        var file = path+"/"+name+extension
-        var exists = FM.FM.fileExists(file)
+        const file = control.ensureDestinationUrl(destinationPath.toString().replace(/\/$/, "") + "/" + name + extension)
+        const exists = FM.FM.fileExists(file)
 
         if(exists)
         {
@@ -198,7 +204,7 @@ FM.FileListingDialog
 
     function compress()
     {
-        _compressor.compress(control.urls, control.normalizePathInput(_locationField.text), _archiveNameField.text, control.type)
+        _compressor.compress(control.urls, control.destinationUrl, _archiveNameField.text, control.type)
     }
 
     function clear()
@@ -216,7 +222,7 @@ FM.FileListingDialog
         return value
     }
 
-    function normalizePathInput(path)
+    function ensureDestinationUrl(path)
     {
         const value = path ? path.toString().trim() : ""
 
