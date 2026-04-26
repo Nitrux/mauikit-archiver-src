@@ -30,7 +30,7 @@ FM.FileListingDialog
     property int type : 0
     onTypeChanged:
     {
-        control.checkExistance(_archiveNameField.text, _locationField.text, control.extensionName(control.type))
+        control.checkExistance(_archiveNameField.text, control.normalizePathInput(_locationField.text), control.extensionName(control.type))
     }
 
     persistent: false
@@ -62,7 +62,7 @@ FM.FileListingDialog
                     return
                 }else
                 {
-                    control.done(control.urls, _locationField.text, _archiveNameField.text, control.type)
+                    control.done(control.urls, control.normalizePathInput(_locationField.text), _archiveNameField.text, control.type)
                     //            control.close()
                 }
             }
@@ -107,7 +107,7 @@ FM.FileListingDialog
 
         onTextChanged:
         {
-            control.checkExistance(text, _locationField.text, control.extensionName(control.type))
+            control.checkExistance(text, control.normalizePathInput(_locationField.text), control.extensionName(control.type))
         }
     }
 
@@ -117,11 +117,11 @@ FM.FileListingDialog
         Layout.fillWidth: true
         Maui.Controls.title: i18n("Destination")
         Maui.Controls.subtitle: i18n("The final location of the new archive")
-        text: control.destination
+        text: control.displayPath(control.destination)
 
         onTextChanged:
         {
-            control.checkExistance(_archiveNameField.text, text, control.extensionName(control.type))
+            control.checkExistance(_archiveNameField.text, control.normalizePathInput(text), control.extensionName(control.type))
         }
     }
 
@@ -198,7 +198,7 @@ FM.FileListingDialog
 
     function compress()
     {
-        _compressor.compress(control.urls, _locationField.text, _archiveNameField.text, control.type)
+        _compressor.compress(control.urls, control.normalizePathInput(_locationField.text), _archiveNameField.text, control.type)
     }
 
     function clear()
@@ -207,5 +207,23 @@ FM.FileListingDialog
         control.urls = []
     }
 
-}
+    function displayPath(path)
+    {
+        const value = path ? path.toString() : ""
+        if(value.startsWith("file://"))
+            return decodeURIComponent(value.replace(/^file:\/\//, ""))
 
+        return value
+    }
+
+    function normalizePathInput(path)
+    {
+        const value = path ? path.toString().trim() : ""
+
+        if(value.startsWith("/") && !value.startsWith("//"))
+            return "file://" + encodeURI(value)
+
+        return value
+    }
+
+}
