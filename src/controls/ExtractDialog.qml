@@ -15,8 +15,9 @@ Maui.InputDialog
     property url destination
     property url fileUrl
     property string dirName
+    readonly property string suggestedDirName: control.defaultDirectoryName(control.fileUrl, control.dirName)
 
-    textEntry.text: dirName
+    textEntry.text: suggestedDirName
 
     title: i18n("Extract")
     message: i18n("Extract the contents of the compressed file")
@@ -36,7 +37,7 @@ Maui.InputDialog
             Label
             {
                 width: parent.width
-                text: control.fileUrl
+                text: control.displayPath(control.fileUrl)
                 font.family: "Monospace"
                 wrapMode: Text.Wrap
                 background: Rectangle
@@ -56,7 +57,7 @@ Maui.InputDialog
             Label
             {
                  width: parent.width
-                text: control.destination
+                text: control.displayPath(control.destination)
                 font.family: "Monospace"
                 wrapMode: Text.Wrap
 
@@ -69,9 +70,72 @@ Maui.InputDialog
         }
     }
 
+    function displayPath(path)
+    {
+        const value = path ? path.toString() : ""
+        if(value.startsWith("file://"))
+            return decodeURIComponent(value.replace(/^file:\/\//, ""))
+
+        return value
+    }
+
+    function archiveName(path)
+    {
+        const value = control.displayPath(path)
+        const parts = value.split("/")
+        return parts.length > 0 ? parts[parts.length - 1] : value
+    }
+
+    function stripArchiveSuffix(name)
+    {
+        const suffixes = [
+            ".tar.gz",
+            ".tar.bz2",
+            ".tar.xz",
+            ".tar.zst",
+            ".tar.lz4",
+            ".tar.lzma",
+            ".tgz",
+            ".tbz2",
+            ".txz",
+            ".tzst",
+            ".zip",
+            ".7z",
+            ".rar",
+            ".tar",
+            ".gz",
+            ".bz2",
+            ".xz",
+            ".zst"
+        ]
+
+        const lowerName = name.toLowerCase()
+
+        for (const suffix of suffixes)
+        {
+            if(lowerName.endsWith(suffix))
+                return name.slice(0, name.length - suffix.length)
+        }
+
+        const lastDot = name.lastIndexOf(".")
+        return lastDot > 0 ? name.slice(0, lastDot) : name
+    }
+
+    function defaultDirectoryName(path, preferredName)
+    {
+        const archiveFileName = control.archiveName(path)
+        const candidate = preferredName ? preferredName.trim() : ""
+
+        if(candidate.length > 0 && candidate.toLowerCase() !== archiveFileName.toLowerCase())
+            return candidate
+
+        const strippedName = control.stripArchiveSuffix(archiveFileName)
+        return strippedName.length > 0 ? strippedName : archiveFileName
+    }
+
     onFinished: (text) =>
                 {
-                    Arc.StaticArchive.extract(control.fileUrl, control.destination, text)
+                    Arc.StaticArchive.extract(control.fileUrl, control.destination, text.trim())
                 }
 
     readonly property bool dirExists: FB.FM.fileExists(control.destination+"/"+control.textEntry.text)
