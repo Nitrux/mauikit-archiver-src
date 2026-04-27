@@ -111,7 +111,7 @@ Maui.InputDialog
             onClosed:
             {
                 _dialogLoader.active = false
-                destroy()
+                _dialogLoader.sourceComponent = undefined
             }
         }
     }
