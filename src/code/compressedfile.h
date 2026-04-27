@@ -3,6 +3,8 @@
 #include <QObject>
 #include <QQmlEngine>
 #include <QSettings>
+#include <QVariantList>
+#include <QVariantMap>
 
 #include <MauiKit4/Core/fmh.h>
 #include <MauiKit4/Core/mauilist.h>
@@ -17,6 +19,7 @@ class Compressor : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QString defaultSaveDir READ defaultSaveDir WRITE setDefaultSaveDir NOTIFY defaultSaveDirChanged)
+    Q_PROPERTY(QVariantList availableAlgorithms READ availableAlgorithms CONSTANT FINAL)
 
 public:
     Compressor(QObject * parent = nullptr);
@@ -24,13 +27,16 @@ public:
 
     QString defaultSaveDir() const;
     void setDefaultSaveDir(QString defaultSaveDir);
+    QVariantList availableAlgorithms() const;
 
 public Q_SLOTS:
     bool compress(const QStringList &files, const QUrl &where, const QString &fileName, const int &compressTypeSelected);
+    bool compressWithOptions(const QStringList &files, const QUrl &where, const QString &fileName, const QVariantMap &algorithm, int level);
 
 private:
     QString m_defaultSaveDir;
     QSettings *m_settings;
+    QVariantList m_availableAlgorithms;
 
 Q_SIGNALS:
     void compressionFinished(const QString &url, bool ok);

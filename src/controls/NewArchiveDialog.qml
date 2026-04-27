@@ -11,7 +11,18 @@ FM.FileListingDialog
 {
     id: control
 
-    onOpened: _archiveNameField.forceActiveFocus()
+    onOpened:
+    {
+        _archiveNameField.forceActiveFocus()
+
+        if(!hasAvailableAlgorithms)
+        {
+            control.alert(i18n("No supported compression tools were found in PATH."), 2)
+        }else
+        {
+            control.resetCompressionLevel()
+        }
+    }
 
     signal done(var files, string path, string name, int type)
 
@@ -21,18 +32,12 @@ FM.FileListingDialog
     property string destination : _compressor.defaultSaveDir
     property url destinationUrl
 
-    /**
-      *@brief The type fo archive. The possible options are:
-      0 - ZIP
-      1 - TAR
-      2 - 7ZIP
-      3 - AR
-      */
-    property int type : 0
-    onTypeChanged:
-    {
-        control.checkExistance(_archiveNameField.text, control.destinationUrl, control.extensionName(control.type))
-    }
+    readonly property var algorithmOptions: control.buildAlgorithmOptions(_compressor.availableAlgorithms)
+    readonly property bool hasAvailableAlgorithms: algorithmOptions.length > 0
+    readonly property var algorithmLabels: control.algorithmOptions.map(function(option) { return option.label ? option.label : "" })
+    readonly property var currentAlgorithm: (_algorithmBox.currentIndex >= 0 && _algorithmBox.currentIndex < control.algorithmOptions.length) ? control.algorithmOptions[_algorithmBox.currentIndex] : ({})
+    readonly property string currentExtension: currentAlgorithm.extension ? currentAlgorithm.extension : ""
+    property int compressionLevel: 0
 
     onDestinationChanged: destinationUrl = control.ensureDestinationUrl(destination)
 
@@ -55,9 +60,10 @@ FM.FileListingDialog
         {
             text: i18n("Create")
             Maui.Controls.status: Maui.Controls.Positive
+            enabled: control.hasAvailableAlgorithms
             onTriggered:
             {
-                const ok = control.checkExistance(_archiveNameField.text, _locationField.text, control.extensionName(control.type))
+                const ok = control.checkExistance(_archiveNameField.text, _locationField.text, control.currentExtension)
 
                 if(!ok)
                 {
@@ -65,7 +71,7 @@ FM.FileListingDialog
                     return
                 }else
                 {
-                    control.done(control.urls, control.destinationUrl.toString(), _archiveNameField.text, control.type)
+                    control.done(control.urls, control.destinationUrl.toString(), _archiveNameField.text, _algorithmBox.currentIndex)
                     //            control.close()
                 }
             }
@@ -107,7 +113,7 @@ FM.FileListingDialog
 
         onTextChanged:
         {
-            control.checkExistance(text, control.destinationUrl, control.extensionName(control.type))
+            control.checkExistance(text, control.destinationUrl, control.currentExtension)
         }
     }
 
@@ -122,44 +128,99 @@ FM.FileListingDialog
         onTextChanged:
         {
             control.destinationUrl = control.ensureDestinationUrl(text)
-            control.checkExistance(_archiveNameField.text, control.destinationUrl, control.extensionName(control.type))
+            control.checkExistance(_archiveNameField.text, control.destinationUrl, control.currentExtension)
         }
     }
 
-    Maui.ToolActions
+    ComboBox
     {
-        id: compressType
-        autoExclusive: true
-        expanded: true
-        display: ToolButton.TextBesideIcon
+        id: _algorithmBox
+        Layout.fillWidth: true
+        enabled: control.hasAvailableAlgorithms
+        model: control.algorithmLabels
+        currentIndex: control.hasAvailableAlgorithms ? 0 : -1
 
-        Action
+        Maui.Controls.title: i18n("Compression algorithm")
+        Maui.Controls.subtitle: i18n("Available options depend on the compressors found in PATH")
+
+        onActivated:
         {
-            text: ".ZIP"
-            icon.name:  "application-zip"
-            checked: control.type === 0
-            onTriggered: control.type = 0
+            control.resetCompressionLevel()
+            control.checkExistance(_archiveNameField.text, control.destinationUrl, control.currentExtension)
+        }
+    }
+
+    ColumnLayout
+    {
+        Layout.fillWidth: true
+        Layout.bottomMargin: Maui.Style.space.medium
+        spacing: Maui.Style.space.small
+
+        FontMetrics
+        {
+            id: _levelValueMetrics
+            font: _levelValueLabel.font
         }
 
-        Action
-        {
-            text: ".TAR"
-            icon.name:  "application-x-tar"
-            checked: control.type === 1
-            onTriggered: control.type = 1
-        }
+        Maui.Controls.title: i18n("Compression level")
+        Maui.Controls.subtitle: control.currentAlgorithm.levelSupported ? i18n("Choose how aggressively the archive should be compressed") : i18n("This format does not support adjustable compression levels")
 
-        Action
+        RowLayout
         {
-            text: ".7ZIP"
-            icon.name:  "application-x-rar"
-            checked: control.type === 2
-            onTriggered: control.type = 2
+            Layout.fillWidth: true
+
+            Label
+            {
+                text: control.currentAlgorithm.levelSupported ? i18n("Low") : i18n("N/A")
+                color: Maui.Theme.textColor
+            }
+
+            Slider
+            {
+                id: _levelSlider
+                Layout.fillWidth: true
+                enabled: control.currentAlgorithm.levelSupported
+                from: control.currentAlgorithm.minLevel !== undefined ? control.currentAlgorithm.minLevel : 0
+                to: control.currentAlgorithm.maxLevel !== undefined ? control.currentAlgorithm.maxLevel : 9
+                stepSize: 1
+
+                Binding on value
+                {
+                    value: control.compressionLevel
+                    restoreMode: Binding.RestoreBindingOrValue
+                }
+
+                onMoved:
+                {
+                    control.compressionLevel = Math.round(value)
+                }
+            }
+
+            Label
+            {
+                text: control.currentAlgorithm.levelSupported ? i18n("High") : i18n("Fixed")
+                color: Maui.Theme.textColor
+            }
+
+            Label
+            {
+                id: _levelValueLabel
+                Layout.preferredWidth: Math.max(_levelValueMetrics.advanceWidth("00"), _levelValueMetrics.advanceWidth(i18n("None")))
+                text: control.currentAlgorithm.levelSupported ? control.compressionLevel : i18n("None")
+                color: Maui.Theme.textColor
+                horizontalAlignment: Text.AlignRight
+            }
         }
     }
 
     function checkExistance(name, path, extension)
     {
+        if(!control.hasAvailableAlgorithms || extension.length === 0)
+        {
+            control.alert(i18n("No supported compression tools were found in PATH."), 2)
+            return false
+        }
+
         const destinationPath = control.ensureDestinationUrl(path)
 
         if(!FM.FM.fileExists(destinationPath))
@@ -187,21 +248,9 @@ FM.FileListingDialog
         return true
     }
 
-    function extensionName(type)
-    {
-        var extension = ""
-        switch(control.type)
-        {
-        case 0: extension = ".zip"; break;
-        case 1: extension = ".tar"; break;
-        case 2: extension = ".7zip"; break;
-        }
-        return extension;
-    }
-
     function compress()
     {
-        _compressor.compress(control.urls, control.destinationUrl, _archiveNameField.text, control.type)
+        _compressor.compressWithOptions(control.urls, control.destinationUrl, _archiveNameField.text, control.currentAlgorithm, control.compressionLevel)
     }
 
     function clear()
@@ -227,6 +276,68 @@ FM.FileListingDialog
             return "file://" + encodeURI(value)
 
         return value
+    }
+
+    function buildAlgorithmOptions(profiles)
+    {
+        const options = []
+        const seen = {}
+
+        for(const profile of profiles)
+        {
+            const profileId = profile.id ? profile.id : ""
+            let algorithmId = ""
+            let label = ""
+            let levelSupported = true
+            let minLevel = 0
+            let maxLevel = 9
+            let defaultLevel = 6
+
+            if(profileId.startsWith("zip"))
+            {
+                algorithmId = "zip"
+                label = i18n("ZIP")
+                defaultLevel = 6
+            }else if(profileId.startsWith("tar"))
+            {
+                algorithmId = "tar"
+                label = i18n("TAR")
+                levelSupported = false
+                minLevel = 0
+                maxLevel = 0
+                defaultLevel = 0
+            }else if(profileId.startsWith("7zip"))
+            {
+                algorithmId = "7zip"
+                label = i18n("7ZIP")
+                defaultLevel = 5
+            }
+
+            if(algorithmId.length === 0 || seen[algorithmId])
+            {
+                continue
+            }
+
+            seen[algorithmId] = true
+            options.push({
+                id: algorithmId,
+                label: label,
+                icon: profile.icon,
+                program: profile.program,
+                extension: profile.extension,
+                levelSupported: levelSupported,
+                minLevel: minLevel,
+                maxLevel: maxLevel,
+                defaultLevel: defaultLevel
+            })
+        }
+
+        return options
+    }
+
+    function resetCompressionLevel()
+    {
+        control.compressionLevel = control.currentAlgorithm.defaultLevel !== undefined ? control.currentAlgorithm.defaultLevel : 0
     }
 
 }

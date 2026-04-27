@@ -16,56 +16,102 @@ Maui.InputDialog
     property url fileUrl
     property string dirName
     readonly property string suggestedDirName: control.defaultDirectoryName(control.fileUrl, control.dirName)
+    readonly property string destinationPath: control.ensureDirectoryUrl(control.destination).toString()
+    readonly property string targetDirectoryPath: destinationPath.length > 0 ? destinationPath.replace(/\/$/, "") + "/" + _directoryNameField.text.trim() : ""
+    readonly property bool dirExists: targetDirectoryPath.length > 0 && FB.FM.fileExists(targetDirectoryPath)
 
-    textEntry.text: suggestedDirName
+    textEntry.visible: false
 
     title: i18n("Extract")
-    message: i18n("Extract the contents of the compressed file")
+    message: i18n("Extract this archive into a new folder.")
 
-    Pane
+    onOpened:
+    {
+        _directoryNameField.text = control.suggestedDirName
+        _directoryNameField.forceActiveFocus()
+        _directoryNameField.selectAll()
+    }
+
+    onAccepted:
+    {
+        const directoryName = _directoryNameField.text.trim()
+
+        if(!control.validate(directoryName))
+            return
+
+        Arc.StaticArchive.extract(control.fileUrl, control.ensureDirectoryUrl(control.destination), directoryName)
+        close()
+    }
+
+    onRejected: close()
+    onDestinationChanged: control.updateExistenceAlert()
+
+    Maui.TextField
+    {
+        id: _directoryNameField
+        Layout.fillWidth: true
+        Maui.Controls.title: i18n("Folder name")
+        placeholderText: i18n("Extraction folder")
+        onTextChanged: control.updateExistenceAlert()
+    }
+
+    Label
+    {
+        Layout.fillWidth: true
+        text: i18n("Destination")
+        color: Maui.Theme.textColor
+    }
+
+    RowLayout
     {
         Layout.fillWidth: true
 
-        background: Rectangle
+        Maui.TextField
         {
-            color: Maui.Theme.alternateBackgroundColor
-            radius: Maui.Style.radiusV
+            id: _destinationField
+            Layout.fillWidth: true
+            readOnly: true
+            text: control.displayPath(control.destination)
         }
 
-        contentItem: Column
+        Button
         {
-            Label
-            {
-                width: parent.width
-                text: control.displayPath(control.fileUrl)
-                font.family: "Monospace"
-                wrapMode: Text.Wrap
-                background: Rectangle
-                {
-                    color: Maui.Theme.alternateBackgroundColor
-                    radius: Maui.Style.radiusV
-                }
-            }
+            text: i18n("Browse")
+            icon.name: "folder-open"
+            onClicked: control.pickDestination()
+        }
+    }
 
-            Label
-            {
-                 width: parent.width
-                text: "=>"
-                font.family: "Monospace"
-            }
+    Loader
+    {
+        id: _dialogLoader
+        active: false
+        visible: false
+    }
 
-            Label
-            {
-                 width: parent.width
-                text: control.displayPath(control.destination)
-                font.family: "Monospace"
-                wrapMode: Text.Wrap
+    Component
+    {
+        id: _destinationDialogComponent
 
-                background: Rectangle
-                {
-                    color: Maui.Theme.alternateBackgroundColor
-                    radius: Maui.Style.radiusV
-                }
+        FB.FileDialog
+        {
+            mode: FB.FileDialog.Open
+            singleSelection: true
+            currentPath: control.destinationPath.length > 0 ? control.destinationPath : FB.FM.homePath()
+            browser.settings.onlyDirs: true
+
+            onFinished: (urls) =>
+                        {
+                            if(urls.length > 0)
+                            {
+                                control.destination = urls[0]
+                            }
+                        }
+
+            onClosed:
+            {
+                _dialogLoader.active = false
+                destroy()
             }
         }
     }
@@ -133,20 +179,68 @@ Maui.InputDialog
         return strippedName.length > 0 ? strippedName : archiveFileName
     }
 
-    onFinished: (text) =>
-                {
-                    Arc.StaticArchive.extract(control.fileUrl, control.destination, text.trim())
-                }
-
-    readonly property bool dirExists: FB.FM.fileExists(control.destination+"/"+control.textEntry.text)
     onDirExistsChanged:
     {
-        if(dirExists)
-            control.alert(i18n("A directory with the same name already exists!"), 2)
-        else
-        {
-            control.alert(i18n("The name looks good"), 0)
-        }
+        control.updateExistenceAlert()
     }
 
+    function ensureDirectoryUrl(path)
+    {
+        const value = path ? path.toString().trim() : ""
+
+        if(value.startsWith("/") && !value.startsWith("//"))
+            return "file://" + encodeURI(value)
+
+        return value
+    }
+
+    function pickDestination()
+    {
+        _dialogLoader.active = false
+        _dialogLoader.sourceComponent = _destinationDialogComponent
+        _dialogLoader.active = true
+        _dialogLoader.item.open()
+    }
+
+    function validate(directoryName)
+    {
+        if(control.destinationPath.length === 0 || !FB.FM.fileExists(control.destinationPath))
+        {
+            control.alert(i18n("Base location does not exist. Try a different location."), 2)
+            return false
+        }
+
+        if(directoryName.length === 0)
+        {
+            control.alert(i18n("Folder name can not be empty."), 2)
+            return false
+        }
+
+        if(control.dirExists)
+        {
+            control.alert(i18n("An extraction folder with the same name already exists."), 2)
+            return false
+        }
+
+        return true
+    }
+
+    function updateExistenceAlert()
+    {
+        const directoryName = _directoryNameField.text.trim()
+
+        if(directoryName.length === 0)
+        {
+            control.alert("", 0)
+            return
+        }
+
+        if(control.dirExists)
+        {
+            control.alert(i18n("An extraction folder with the same name already exists."), 2)
+            return
+        }
+
+        control.alert("", 0)
+    }
 }
