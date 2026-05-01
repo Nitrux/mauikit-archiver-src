@@ -42,8 +42,8 @@ add_library(MauiKit${MAUI_MAJOR_VERSION}::Archiver ALIAS MauiKitArchiver${MAUI_M
 
 generate_export_header(${LIB_NAME} BASE_NAME Archiver)
 set_target_properties(${LIB_NAME} PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
+    VERSION ${MAUIKIT_SO_VERSION}
+    SOVERSION ${MAUIKIT_SO_VERSION}
     EXPORT_NAME "Archiver")
 
 target_include_directories(${LIB_NAME}
