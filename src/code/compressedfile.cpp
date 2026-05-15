@@ -497,9 +497,7 @@ bool Compressor::compress(const QStringList &files, const QUrl &where, const QSt
             if (QFileInfo(entrie).isFile())
             {
                 auto file = QFile(entrie);
-                file.open(QIODevice::ReadOnly);
-
-                if (!file.isOpen())
+                if (!file.open(QIODevice::ReadOnly))
                 {
                     qDebug() << "ERROR. CURRENT USER DOES NOT HAVE PEMRISSION FOR WRITE IN THE CURRENT DIRECTORY.";
                     continue;
@@ -609,9 +607,7 @@ bool Compressor::compress(const QStringList &files, const QUrl &where, const QSt
         if (!QFileInfo(QUrl(uri).toLocalFile()).isDir())
         {
             auto file = QFile(QUrl(uri).toLocalFile());
-            file.open(QIODevice::ReadWrite);
-
-            if (!file.isOpen())
+            if (!file.open(QIODevice::ReadWrite))
             {
                 qDebug() << "ERROR. CURRENT USER DOES NOT HAVE PEMRISSION FOR WRITE IN THE CURRENT DIRECTORY.";
                 ok = false;
