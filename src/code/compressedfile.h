@@ -31,7 +31,7 @@ public:
 
 public Q_SLOTS:
     bool compress(const QStringList &files, const QUrl &where, const QString &fileName, const int &compressTypeSelected);
-    bool compressWithOptions(const QStringList &files, const QUrl &where, const QString &fileName, const QVariantMap &algorithm, int level);
+    bool compressWithOptions(const QStringList &files, const QUrl &where, const QString &fileName, const QVariantMap &algorithm, int level, const QString &password);
 
 private:
     QString m_defaultSaveDir;
@@ -94,7 +94,7 @@ private:
     QString m_currentPath = "/";
     QString m_fileName;
     bool m_canGoUp = false;
-    bool m_opened;
+    bool m_opened = false;
 
     bool addFile(const QString &url, const QString &path);
     bool extractFile(const QString &url, const QString &where);
@@ -151,5 +151,6 @@ public:
     }
 
 public Q_SLOTS:
+    static bool isSupported(QUrl url);
     static bool extract(QUrl url, QUrl where, QString dir);    
 };

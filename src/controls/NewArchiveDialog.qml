@@ -20,7 +20,10 @@ FM.FileListingDialog
             control.alert(i18n("No supported compression tools were found in PATH."), 2)
         }else
         {
+            _formatBox.currentIndex = 0
+            _algorithmBox.currentIndex = 0
             control.resetCompressionLevel()
+            control.resetEncryption()
         }
     }
 
@@ -32,11 +35,16 @@ FM.FileListingDialog
     property string destination : _compressor.defaultSaveDir
     property url destinationUrl
 
-    readonly property var algorithmOptions: control.buildAlgorithmOptions(_compressor.availableAlgorithms)
-    readonly property bool hasAvailableAlgorithms: algorithmOptions.length > 0
-    readonly property var algorithmLabels: control.algorithmOptions.map(function(option) { return option.label ? option.label : "" })
+    readonly property var compressionProfiles: _compressor.availableAlgorithms
+    readonly property var formatOptions: control.buildFormatOptions(control.compressionProfiles)
+    readonly property bool hasAvailableAlgorithms: formatOptions.length > 0
+    readonly property var formatLabels: control.formatOptions.map(function(option) { return option.label ? option.label : "" })
+    readonly property var currentFormat: (_formatBox.currentIndex >= 0 && _formatBox.currentIndex < control.formatOptions.length) ? control.formatOptions[_formatBox.currentIndex] : ({})
+    readonly property var algorithmOptions: control.algorithmsForFormat(control.compressionProfiles, control.currentFormat.id ? control.currentFormat.id : "")
+    readonly property var algorithmLabels: control.algorithmOptions.map(function(option) { return option.methodLabel ? option.methodLabel : "" })
     readonly property var currentAlgorithm: (_algorithmBox.currentIndex >= 0 && _algorithmBox.currentIndex < control.algorithmOptions.length) ? control.algorithmOptions[_algorithmBox.currentIndex] : ({})
     readonly property string currentExtension: currentAlgorithm.extension ? currentAlgorithm.extension : ""
+    readonly property bool encryptionAvailable: currentAlgorithm.encryptionEnabled === true
     property int compressionLevel: 0
 
     onDestinationChanged: destinationUrl = control.ensureDestinationUrl(destination)
@@ -63,17 +71,15 @@ FM.FileListingDialog
             enabled: control.hasAvailableAlgorithms
             onTriggered:
             {
+                if(!control.validateOptions())
+                    return
+
                 const ok = control.checkExistance(_archiveNameField.text, _locationField.text, control.currentExtension)
 
                 if(!ok)
-                {
-                    control.alert(i18n("Some error occured. Maybe current user does not have permission for writing in this directory."), 2)
                     return
-                }else
-                {
-                    control.done(control.urls, control.destinationUrl.toString(), _archiveNameField.text, _algorithmBox.currentIndex)
-                    //            control.close()
-                }
+
+                control.done(control.urls, control.destinationUrl.toString(), _archiveNameField.text, _formatBox.currentIndex)
             }
         }
     ]
@@ -93,9 +99,6 @@ FM.FileListingDialog
                                    {
                                        control.clear()
                                        control.close()
-                                   }else
-                                   {
-                                       return
                                    }
 
                                    Maui.App.rootComponent.notify("application-x-archive",
@@ -134,18 +137,39 @@ FM.FileListingDialog
 
     ComboBox
     {
-        id: _algorithmBox
+        id: _formatBox
         Layout.fillWidth: true
         enabled: control.hasAvailableAlgorithms
-        model: control.algorithmLabels
+        model: control.formatLabels
         currentIndex: control.hasAvailableAlgorithms ? 0 : -1
 
+        Maui.Controls.title: i18n("Archive format")
+        Maui.Controls.subtitle: i18n("Choose the archive container")
+
+        onActivated:
+        {
+            _algorithmBox.currentIndex = 0
+            control.resetCompressionLevel()
+            control.resetEncryption()
+            control.checkExistance(_archiveNameField.text, control.destinationUrl, control.currentExtension)
+        }
+    }
+
+    ComboBox
+    {
+        id: _algorithmBox
+        Layout.fillWidth: true
+        enabled: control.algorithmOptions.length > 0
+        model: control.algorithmLabels
+        currentIndex: control.algorithmOptions.length > 0 ? 0 : -1
+
         Maui.Controls.title: i18n("Compression algorithm")
-        Maui.Controls.subtitle: i18n("Available options depend on the compressors found in PATH")
+        Maui.Controls.subtitle: i18n("Available options depend on the compression tools found in PATH")
 
         onActivated:
         {
             control.resetCompressionLevel()
+            control.resetEncryption()
             control.checkExistance(_archiveNameField.text, control.destinationUrl, control.currentExtension)
         }
     }
@@ -155,6 +179,8 @@ FM.FileListingDialog
         Layout.fillWidth: true
         Layout.bottomMargin: Maui.Style.space.medium
         spacing: Maui.Style.space.small
+        visible: control.currentAlgorithm.levelEnabled === true
+        enabled: visible
 
         FontMetrics
         {
@@ -163,7 +189,7 @@ FM.FileListingDialog
         }
 
         Maui.Controls.title: i18n("Compression level")
-        Maui.Controls.subtitle: control.currentAlgorithm.levelSupported ? i18n("Choose how aggressively the archive should be compressed") : i18n("This format does not support adjustable compression levels")
+        Maui.Controls.subtitle: i18n("Choose how aggressively the archive should be compressed")
 
         RowLayout
         {
@@ -171,7 +197,7 @@ FM.FileListingDialog
 
             Label
             {
-                text: control.currentAlgorithm.levelSupported ? i18n("Low") : i18n("N/A")
+                text: i18n("Fast")
                 color: Maui.Theme.textColor
             }
 
@@ -179,7 +205,7 @@ FM.FileListingDialog
             {
                 id: _levelSlider
                 Layout.fillWidth: true
-                enabled: control.currentAlgorithm.levelSupported
+                enabled: control.currentAlgorithm.levelEnabled === true
                 from: control.currentAlgorithm.minLevel !== undefined ? control.currentAlgorithm.minLevel : 0
                 to: control.currentAlgorithm.maxLevel !== undefined ? control.currentAlgorithm.maxLevel : 9
                 stepSize: 1
@@ -198,19 +224,70 @@ FM.FileListingDialog
 
             Label
             {
-                text: control.currentAlgorithm.levelSupported ? i18n("High") : i18n("Fixed")
+                text: i18n("Maximum")
                 color: Maui.Theme.textColor
             }
 
             Label
             {
                 id: _levelValueLabel
-                Layout.preferredWidth: Math.max(_levelValueMetrics.advanceWidth("00"), _levelValueMetrics.advanceWidth(i18n("None")))
-                text: control.currentAlgorithm.levelSupported ? control.compressionLevel : i18n("None")
+                Layout.preferredWidth: _levelValueMetrics.advanceWidth("00")
+                text: control.compressionLevel
                 color: Maui.Theme.textColor
                 horizontalAlignment: Text.AlignRight
             }
         }
+    }
+
+    Maui.SectionItem
+    {
+        Layout.fillWidth: true
+        flat: true
+        leftPadding: 0
+        rightPadding: 0
+        enabled: control.encryptionAvailable
+        label1.text: i18n("Password protection")
+        label2.text: control.encryptionAvailable
+                     ? i18n("Encrypt the archive with AES-256")
+                     : control.currentFormat.id === "tar"
+                       ? i18n("TAR does not provide an encryption layer")
+                       : i18n("AES-256 encryption requires 7-Zip")
+        label2.wrapMode: Text.Wrap
+
+        template.content: Switch
+        {
+            id: _passwordSwitch
+            enabled: control.encryptionAvailable
+            checked: false
+            onToggled:
+            {
+                if(!checked)
+                {
+                    _passwordField.clear()
+                    _confirmPasswordField.clear()
+                }
+            }
+        }
+    }
+
+    Maui.PasswordField
+    {
+        id: _passwordField
+        Layout.fillWidth: true
+        visible: _passwordSwitch.checked
+        enabled: visible
+        Maui.Controls.title: i18n("Password")
+        placeholderText: i18n("Enter a password")
+    }
+
+    Maui.PasswordField
+    {
+        id: _confirmPasswordField
+        Layout.fillWidth: true
+        visible: _passwordSwitch.checked
+        enabled: visible
+        Maui.Controls.title: i18n("Confirm password")
+        placeholderText: i18n("Enter the password again")
     }
 
     function checkExistance(name, path, extension)
@@ -225,13 +302,13 @@ FM.FileListingDialog
 
         if(!FM.FM.fileExists(destinationPath))
         {
-            control.alert(i18n("Base location does not exists. Try with a different location."), 2)
+            control.alert(i18n("Base location does not exist. Try a different location."), 2)
             return false
         }
 
         if(name.length === 0)
         {
-            control.alert(i18n("File name can not be empty."), 2)
+            control.alert(i18n("File name cannot be empty."), 2)
             return false
         }
 
@@ -250,12 +327,14 @@ FM.FileListingDialog
 
     function compress()
     {
-        _compressor.compressWithOptions(control.urls, control.destinationUrl, _archiveNameField.text, control.currentAlgorithm, control.compressionLevel)
+        const password = _passwordSwitch.checked ? _passwordField.text : ""
+        _compressor.compressWithOptions(control.urls, control.destinationUrl, _archiveNameField.text, control.currentAlgorithm, control.compressionLevel, password)
     }
 
     function clear()
     {
         _archiveNameField.clear()
+        control.resetEncryption()
         control.urls = []
     }
 
@@ -278,66 +357,83 @@ FM.FileListingDialog
         return value
     }
 
-    function buildAlgorithmOptions(profiles)
+    function buildFormatOptions(profiles)
     {
         const options = []
         const seen = {}
 
         for(const profile of profiles)
         {
-            const profileId = profile.id ? profile.id : ""
-            let algorithmId = ""
-            let label = ""
-            let levelSupported = true
-            let minLevel = 0
-            let maxLevel = 9
-            let defaultLevel = 6
-
-            if(profileId.startsWith("zip"))
-            {
-                algorithmId = "zip"
-                label = i18n("ZIP")
-                defaultLevel = 6
-            }else if(profileId.startsWith("tar"))
-            {
-                algorithmId = "tar"
-                label = i18n("TAR")
-                levelSupported = false
-                minLevel = 0
-                maxLevel = 0
-                defaultLevel = 0
-            }else if(profileId.startsWith("7zip"))
-            {
-                algorithmId = "7zip"
-                label = i18n("7ZIP")
-                defaultLevel = 5
-            }
-
-            if(algorithmId.length === 0 || seen[algorithmId])
-            {
+            const formatId = profile.formatId ? profile.formatId : ""
+            if(formatId.length === 0 || seen[formatId])
                 continue
-            }
 
-            seen[algorithmId] = true
+            seen[formatId] = true
             options.push({
-                id: algorithmId,
-                label: label,
-                icon: profile.icon,
-                program: profile.program,
-                extension: profile.extension,
-                levelSupported: levelSupported,
-                minLevel: minLevel,
-                maxLevel: maxLevel,
-                defaultLevel: defaultLevel
+                id: formatId,
+                label: profile.formatLabel ? profile.formatLabel : formatId,
+                icon: profile.icon
             })
         }
 
         return options
     }
 
+    function algorithmsForFormat(profiles, formatId)
+    {
+        const options = []
+
+        for(const profile of profiles)
+        {
+            if(profile.formatId === formatId)
+                options.push(profile)
+        }
+
+        return options
+    }
+
+    function validateOptions()
+    {
+        if(!control.currentAlgorithm.id)
+        {
+            control.alert(i18n("No compression algorithm is available for this archive format."), 2)
+            return false
+        }
+
+        if(!_passwordSwitch.checked)
+            return true
+
+        if(!control.encryptionAvailable)
+        {
+            control.alert(i18n("AES-256 encryption is not available for this archive format."), 2)
+            return false
+        }
+
+        if(_passwordField.text.length === 0)
+        {
+            control.alert(i18n("Password cannot be empty."), 2)
+            return false
+        }
+
+        if(_passwordField.text !== _confirmPasswordField.text)
+        {
+            control.alert(i18n("Passwords do not match."), 2)
+            return false
+        }
+
+        return true
+    }
+
     function resetCompressionLevel()
     {
         control.compressionLevel = control.currentAlgorithm.defaultLevel !== undefined ? control.currentAlgorithm.defaultLevel : 0
+    }
+
+    function resetEncryption()
+    {
+        _passwordSwitch.checked = false
+        _passwordField.clear()
+        _confirmPasswordField.clear()
     }
 
 }

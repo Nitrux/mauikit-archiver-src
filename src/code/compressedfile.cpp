@@ -6,6 +6,7 @@
 
 #if (defined Q_OS_LINUX || defined Q_OS_FREEBSD) && !defined Q_OS_ANDROID
 #include <K7Zip>
+#define MAUIKIT_ARCHIVER_HAS_K7ZIP
 #endif
 
 #include <QDirIterator>
@@ -27,7 +28,21 @@ namespace
 {
 QString findSevenZipExecutable()
 {
-    const QStringList candidates {QStringLiteral("7z"), QStringLiteral("7za"), QStringLiteral("7zr")};
+    const QStringList candidates {QStringLiteral("7zz"), QStringLiteral("7z"), QStringLiteral("7za"), QStringLiteral("7zr")};
+
+    for (const auto &candidate : candidates)
+    {
+        const auto executable = QStandardPaths::findExecutable(candidate);
+        if (!executable.isEmpty())
+            return executable;
+    }
+
+    return {};
+}
+
+QString findSevenZipZipWriterExecutable()
+{
+    const QStringList candidates {QStringLiteral("7zz"), QStringLiteral("7z"), QStringLiteral("7za")};
 
     for (const auto &candidate : candidates)
     {
@@ -40,25 +55,36 @@ QString findSevenZipExecutable()
 }
 
 QVariantMap makeCompressionAlgorithm(const QString &id,
-                                     const QString &label,
+                                     const QString &formatId,
+                                     const QString &formatLabel,
+                                     const QString &methodLabel,
                                      const QString &icon,
                                      const QString &program,
+                                     const QString &writer,
+                                     const QString &filterProgram,
                                      const QString &extension,
                                      const int defaultLevel,
                                      const int minLevel,
                                      const int maxLevel,
-                                     const bool levelEnabled)
+                                     const bool levelEnabled,
+                                     const bool encryptionEnabled)
 {
     return {
         {QStringLiteral("id"), id},
-        {QStringLiteral("label"), label},
+        {QStringLiteral("formatId"), formatId},
+        {QStringLiteral("formatLabel"), formatLabel},
+        {QStringLiteral("methodLabel"), methodLabel},
+        {QStringLiteral("label"), formatLabel},
         {QStringLiteral("icon"), icon},
         {QStringLiteral("program"), program},
+        {QStringLiteral("writer"), writer},
+        {QStringLiteral("filterProgram"), filterProgram},
         {QStringLiteral("extension"), extension},
         {QStringLiteral("defaultLevel"), defaultLevel},
         {QStringLiteral("minLevel"), minLevel},
         {QStringLiteral("maxLevel"), maxLevel},
-        {QStringLiteral("levelEnabled"), levelEnabled}
+        {QStringLiteral("levelEnabled"), levelEnabled},
+        {QStringLiteral("encryptionEnabled"), encryptionEnabled}
     };
 }
 
@@ -66,46 +92,91 @@ QVariantList buildAvailableAlgorithms()
 {
     QVariantList algorithms;
 
+    const auto sevenZipExecutable = findSevenZipExecutable();
+    const auto sevenZipZipWriterExecutable = findSevenZipZipWriterExecutable();
     const auto zipExecutable = QStandardPaths::findExecutable(QStringLiteral("zip"));
-    if (!zipExecutable.isEmpty())
+    const auto zipWriter = !sevenZipZipWriterExecutable.isEmpty() ? sevenZipZipWriterExecutable : zipExecutable;
+    if (!zipWriter.isEmpty())
     {
-        algorithms << makeCompressionAlgorithm(QStringLiteral("zip"),
+        algorithms << makeCompressionAlgorithm(QStringLiteral("zip-deflate"),
+                                               QStringLiteral("zip"),
                                                i18n("ZIP"),
+                                               i18n("Deflate"),
                                                QStringLiteral("application-zip"),
-                                               zipExecutable,
+                                               zipWriter,
+                                               sevenZipZipWriterExecutable.isEmpty() ? QStringLiteral("zip") : QStringLiteral("7zip"),
+                                               QString(),
                                                QStringLiteral(".zip"),
                                                6,
                                                0,
                                                9,
-                                               true);
+                                               true,
+                                               !sevenZipZipWriterExecutable.isEmpty());
     }
 
     const auto tarExecutable = QStandardPaths::findExecutable(QStringLiteral("tar"));
     if (!tarExecutable.isEmpty())
     {
-        algorithms << makeCompressionAlgorithm(QStringLiteral("tar"),
-                                               i18n("TAR"),
-                                               QStringLiteral("application-x-tar"),
-                                               tarExecutable,
-                                               QStringLiteral(".tar"),
-                                               0,
-                                               0,
-                                               0,
-                                               false);
+        const auto appendTarAlgorithm = [&algorithms, &tarExecutable](const QString &id,
+                                                                      const QString &label,
+                                                                      const QString &filterProgram,
+                                                                      const QString &extension,
+                                                                      const int defaultLevel,
+                                                                      const int minLevel,
+                                                                      const int maxLevel,
+                                                                      const bool levelEnabled)
+        {
+            algorithms << makeCompressionAlgorithm(id,
+                                                   QStringLiteral("tar"),
+                                                   i18n("TAR"),
+                                                   label,
+                                                   QStringLiteral("application-x-tar"),
+                                                   tarExecutable,
+                                                   QStringLiteral("tar"),
+                                                   filterProgram,
+                                                   extension,
+                                                   defaultLevel,
+                                                   minLevel,
+                                                   maxLevel,
+                                                   levelEnabled,
+                                                   false);
+        };
+
+        appendTarAlgorithm(QStringLiteral("tar-none"), i18n("Uncompressed"), QString(), QStringLiteral(".tar"), 0, 0, 0, false);
+
+        const auto gzipExecutable = QStandardPaths::findExecutable(QStringLiteral("gzip"));
+        if (!gzipExecutable.isEmpty())
+            appendTarAlgorithm(QStringLiteral("tar-gzip"), i18n("Gzip"), gzipExecutable, QStringLiteral(".tar.gz"), 6, 1, 9, true);
+
+        const auto bzip2Executable = QStandardPaths::findExecutable(QStringLiteral("bzip2"));
+        if (!bzip2Executable.isEmpty())
+            appendTarAlgorithm(QStringLiteral("tar-bzip2"), i18n("Bzip2"), bzip2Executable, QStringLiteral(".tar.bz2"), 6, 1, 9, true);
+
+        const auto xzExecutable = QStandardPaths::findExecutable(QStringLiteral("xz"));
+        if (!xzExecutable.isEmpty())
+            appendTarAlgorithm(QStringLiteral("tar-xz"), i18n("XZ"), xzExecutable, QStringLiteral(".tar.xz"), 6, 0, 9, true);
+
+        const auto zstdExecutable = QStandardPaths::findExecutable(QStringLiteral("zstd"));
+        if (!zstdExecutable.isEmpty())
+            appendTarAlgorithm(QStringLiteral("tar-zstd"), i18n("Zstandard"), zstdExecutable, QStringLiteral(".tar.zst"), 3, 1, 19, true);
     }
 
-    const auto sevenZipExecutable = findSevenZipExecutable();
     if (!sevenZipExecutable.isEmpty())
     {
-        algorithms << makeCompressionAlgorithm(QStringLiteral("7zip"),
+        algorithms << makeCompressionAlgorithm(QStringLiteral("7zip-lzma2"),
+                                               QStringLiteral("7zip"),
                                                i18n("7ZIP"),
+                                               i18n("LZMA2"),
                                                QStringLiteral("application-x-7z-compressed"),
                                                sevenZipExecutable,
+                                               QStringLiteral("7zip"),
+                                               QString(),
                                                QStringLiteral(".7z"),
                                                5,
                                                0,
                                                9,
-                                               true);
+                                               true,
+                                               !sevenZipZipWriterExecutable.isEmpty());
     }
 
     return algorithms;
@@ -114,6 +185,61 @@ QVariantList buildAvailableAlgorithms()
 QString archivePathForAlgorithm(const QUrl &where, const QString &fileName, const QVariantMap &algorithm)
 {
     return QDir(where.toLocalFile()).filePath(fileName + algorithm.value(QStringLiteral("extension")).toString());
+}
+
+QStringList redactedArguments(const QStringList &arguments)
+{
+    QStringList result = arguments;
+
+    for (auto &argument : result)
+    {
+        if (argument.startsWith(QStringLiteral("-p")))
+            argument = QStringLiteral("-p********");
+    }
+
+    return result;
+}
+
+enum class ArchiveType
+{
+    Unknown,
+    Tar,
+    Zip,
+    SevenZip
+};
+
+ArchiveType archiveTypeForUrl(const QUrl &url)
+{
+    if (!url.isLocalFile())
+        return ArchiveType::Unknown;
+
+    const auto mimeType = FMStatic::getMime(url);
+    const QStringList tarMimeTypes {
+        QStringLiteral("application/x-tar"),
+        QStringLiteral("application/x-compressed-tar"),
+        QStringLiteral("application/x-gzip-compressed-tar"),
+        QStringLiteral("application/x-bzip-compressed-tar"),
+        QStringLiteral("application/x-bzip2-compressed-tar"),
+        QStringLiteral("application/x-xz-compressed-tar"),
+        QStringLiteral("application/x-zstd-compressed-tar")
+    };
+
+    if (tarMimeTypes.contains(mimeType))
+        return ArchiveType::Tar;
+
+    if (mimeType == QLatin1String("application/zip")
+        || mimeType == QLatin1String("application/x-zip")
+        || mimeType == QLatin1String("application/x-zip-compressed"))
+    {
+        return ArchiveType::Zip;
+    }
+
+#ifdef MAUIKIT_ARCHIVER_HAS_K7ZIP
+    if (mimeType == QLatin1String("application/x-7z-compressed"))
+        return ArchiveType::SevenZip;
+#endif
+
+    return ArchiveType::Unknown;
 }
 }
 
@@ -243,18 +369,38 @@ void CompressedFile::goToRoot()
 
 void CompressedFile::close()
 {
+    if (!m_archive)
+        return;
+
     m_archive->close();
+
+    if (m_opened)
+    {
+        m_opened = false;
+        Q_EMIT openedChanged(m_opened);
+    }
 }
 
 void CompressedFile::open()
 {
+    if (m_archive)
+    {
+        m_archive->close();
+        delete m_archive;
+        m_archive = nullptr;
+    }
+
     m_archive = CompressedFile::getKArchiveObject(m_url);
-    m_archive->open(QIODevice::ReadOnly);
+    const bool opened = m_archive && m_archive->open(QIODevice::ReadOnly);
 
-    assert(m_archive->isOpen() == true);
+    if (m_opened != opened)
+    {
+        m_opened = opened;
+        Q_EMIT openedChanged(m_opened);
+    }
 
-    m_opened = m_archive->isOpen();
-    Q_EMIT openedChanged(m_opened);
+    if (!opened && m_archive)
+        qWarning() << "Could not open archive" << m_url << m_archive->errorString();
 }
 
 QString CompressedFile::temporaryFile(const QString &path)
@@ -366,24 +512,12 @@ void CompressedFile::extract(const QUrl &where, const QString &directory)
     if (!m_url.isLocalFile())
         return;    
 
-    if(!m_archive)
+    if(!m_archive || !m_archive->isOpen())
         return;
-
-    qDebug() << "@gadominguez File:fm.cpp Funcion: extractFile  "
-             << "URL: " << m_url << "WHERE: " << where.toString() << " DIR: " << directory;
 
     QString where_ = where.toLocalFile() + "/" + directory;
 
-           // auto kArch = CompressedFile::getKArchiveObject(m_url);
-           // kArch->open(QIODevice::ReadOnly);
-
-    qDebug() << "@gadominguez File:fm.cpp Funcion: extractFile  " << m_archive->directory()->entries();
-
-    bool ok = false;
-    if (m_archive->isOpen())
-    {
-        ok = m_archive->directory()->copyTo(where_, true);
-    }
+    const bool ok = m_archive->directory()->copyTo(where_, true);
 
     Q_EMIT this->extractionFinished(where.toString(), ok);
 }
@@ -461,7 +595,7 @@ bool Compressor::compress(const QStringList &files, const QUrl &where, const QSt
         {
             const auto algorithm = algorithmValue.toMap();
             if (algorithm.value(QStringLiteral("id")).toString().startsWith(expectedId))
-                return compressWithOptions(files, where, fileName, algorithm, algorithm.value(QStringLiteral("defaultLevel")).toInt());
+                return compressWithOptions(files, where, fileName, algorithm, algorithm.value(QStringLiteral("defaultLevel")).toInt(), QString());
         }
     }
 
@@ -633,16 +767,27 @@ bool Compressor::compress(const QStringList &files, const QUrl &where, const QSt
     return ok;
 }
 
-bool Compressor::compressWithOptions(const QStringList &files, const QUrl &where, const QString &fileName, const QVariantMap &algorithm, int level)
+bool Compressor::compressWithOptions(const QStringList &files, const QUrl &where, const QString &fileName, const QVariantMap &algorithm, int level, const QString &password)
 {
     const auto program = algorithm.value(QStringLiteral("program")).toString();
     const auto extension = algorithm.value(QStringLiteral("extension")).toString();
-    const auto id = algorithm.value(QStringLiteral("id")).toString();
+    const auto formatId = algorithm.value(QStringLiteral("formatId")).toString();
+    const auto writer = algorithm.value(QStringLiteral("writer")).toString();
+    const bool levelEnabled = algorithm.value(QStringLiteral("levelEnabled")).toBool();
+    const bool encryptionEnabled = algorithm.value(QStringLiteral("encryptionEnabled")).toBool();
 
-    if (files.isEmpty() || program.isEmpty() || extension.isEmpty() || fileName.isEmpty() || !where.isLocalFile())
+    if (files.isEmpty() || program.isEmpty() || extension.isEmpty() || fileName.isEmpty() || !where.isLocalFile()
+        || writer.isEmpty() || (!password.isEmpty() && !encryptionEnabled))
     {
         Q_EMIT compressionFinished(QString(), false);
         return false;
+    }
+
+    if (levelEnabled)
+    {
+        const int minLevel = algorithm.value(QStringLiteral("minLevel")).toInt();
+        const int maxLevel = algorithm.value(QStringLiteral("maxLevel")).toInt();
+        level = qBound(minLevel, level, maxLevel);
     }
 
     const auto archivePath = archivePathForAlgorithm(where, fileName, algorithm);
@@ -668,20 +813,53 @@ bool Compressor::compressWithOptions(const QStringList &files, const QUrl &where
     }
 
     QStringList arguments;
-    if (id.startsWith(QStringLiteral("zip")))
+    if (writer == QLatin1String("zip"))
     {
         arguments << QStringLiteral("-r")
                   << QStringLiteral("-%1").arg(level)
                   << archivePath;
-    } else if (id.startsWith(QStringLiteral("tar")))
+    } else if (writer == QLatin1String("tar"))
     {
+        const auto filterProgram = algorithm.value(QStringLiteral("filterProgram")).toString();
+        if (!filterProgram.isEmpty())
+        {
+            const auto filterCommand = levelEnabled
+                ? QStringLiteral("%1 -%2").arg(filterProgram).arg(level)
+                : filterProgram;
+            arguments << QStringLiteral("--use-compress-program=%1").arg(filterCommand);
+        }
+
         arguments << QStringLiteral("-cf") << archivePath;
-    } else if (id.startsWith(QStringLiteral("7zip")))
+    } else if (writer == QLatin1String("7zip"))
     {
-        arguments << QStringLiteral("a")
-                  << QStringLiteral("-t7z")
-                  << QStringLiteral("-mx=%1").arg(level)
-                  << archivePath;
+        arguments << QStringLiteral("a");
+
+        if (formatId == QLatin1String("zip"))
+        {
+            arguments << QStringLiteral("-tzip")
+                      << QStringLiteral("-mm=Deflate");
+
+            if (!password.isEmpty())
+                arguments << QStringLiteral("-mem=AES256");
+        } else if (formatId == QLatin1String("7zip"))
+        {
+            arguments << QStringLiteral("-t7z")
+                      << QStringLiteral("-m0=LZMA2");
+
+            if (!password.isEmpty())
+                arguments << QStringLiteral("-mhe=on");
+        } else
+        {
+            Q_EMIT compressionFinished(QUrl::fromLocalFile(archivePath).toString(), false);
+            return false;
+        }
+
+        arguments << QStringLiteral("-mx=%1").arg(level);
+
+        if (!password.isEmpty())
+            arguments << QStringLiteral("-p%1").arg(password);
+
+        arguments << archivePath;
     } else
     {
         Q_EMIT compressionFinished(QUrl::fromLocalFile(archivePath).toString(), false);
@@ -698,7 +876,7 @@ bool Compressor::compressWithOptions(const QStringList &files, const QUrl &where
 
     if (!process.waitForStarted() || !process.waitForFinished(-1))
     {
-        qWarning() << "Failed to run compressor" << program << arguments << process.errorString();
+        qWarning() << "Failed to run compressor" << program << redactedArguments(arguments) << process.errorString();
         Q_EMIT compressionFinished(QUrl::fromLocalFile(archivePath).toString(), false);
         return false;
     }
@@ -708,7 +886,7 @@ bool Compressor::compressWithOptions(const QStringList &files, const QUrl &where
         && QFileInfo::exists(archivePath);
 
     if (!ok)
-        qWarning() << "Compression command failed" << program << arguments << process.exitCode() << process.readAllStandardError();
+        qWarning() << "Compression command failed" << program << redactedArguments(arguments) << process.exitCode() << process.readAllStandardError();
 
     Q_EMIT compressionFinished(QUrl::fromLocalFile(archivePath).toString(), ok);
     return ok;
@@ -716,33 +894,24 @@ bool Compressor::compressWithOptions(const QStringList &files, const QUrl &where
 
 KArchive *CompressedFile::getKArchiveObject(const QUrl &url)
 {
-    KArchive *kArch = nullptr;
-
-    /*
-     * This checks depends on type COMPRESSED_MIMETYPES in file fmh.h
-     */
-    qDebug() << "@gadominguez File: fmstatic.cpp Func: getKArchiveObject MimeType: " << FMStatic::getMime(url);
-
-    auto mime = FMStatic::getMime(url);
-
-    if (mime.contains("application/x-tar") || mime.contains("application/x-compressed-tar"))
+    switch (archiveTypeForUrl(url))
     {
-        kArch = new KTar(url.toLocalFile());
-    } else if (mime.contains("application/zip"))
-    {
-        kArch = new KZip(url.toLocalFile());
-
-    } else if (mime.contains("application/x-7z-compressed"))
-    {
-#ifdef K7ZIP_H
-        kArch = new K7Zip(url.toLocalFile());
+    case ArchiveType::Tar:
+        return new KTar(url.toLocalFile());
+    case ArchiveType::Zip:
+        return new KZip(url.toLocalFile());
+    case ArchiveType::SevenZip:
+#ifdef MAUIKIT_ARCHIVER_HAS_K7ZIP
+        return new K7Zip(url.toLocalFile());
+#else
+        return nullptr;
 #endif
-    } else
-    {
-        qDebug() << "ERROR. COMPRESSED FILE TYPE UNKOWN " << url.toString();
+    case ArchiveType::Unknown:
+        qWarning() << "Unsupported archive type" << url << "MIME type:" << FMStatic::getMime(url);
+        return nullptr;
     }
 
-    return kArch;
+    return nullptr;
 }
 
 void CompressedFile::setUrl(const QUrl &url)
@@ -829,4 +998,9 @@ bool StaticArchive::extract(QUrl url, QUrl where, QString dir)
 
     file.extract(where, dir);
     return true;
+}
+
+bool StaticArchive::isSupported(QUrl url)
+{
+    return archiveTypeForUrl(url) != ArchiveType::Unknown;
 }
