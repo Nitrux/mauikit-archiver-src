@@ -8,15 +8,28 @@ import org.mauikit.filebrowsing as FM
 import org.mauikit.archiver as Arc
 
 
+/**
+ *  org.mauikit.controls.Page
+ *  Browses and manages the contents of an archive.
+ *
+ * ArchivePage presents the current archive directory, supports filtering and
+ * sorting its entries, and exposes controls for navigation, insertion,
+ * extraction, and archive creation.
+ */
 Maui.Page
 {
     id: control
     title: _manager.fileName
 
+    /** The URL of the archive displayed by the page. */
     property alias url : _manager.url
+
+    /** The CompressedFile instance that owns the archive state and model. */
     readonly property alias manager : _manager
 
     showTitle: false
+
+    /** Emitted when the entry at  index is activated. */
     signal itemClicked(int index, var item)
 
     Arc.CompressedFile

@@ -15,6 +15,13 @@ class KArchiveFile;
 
 class CompressedFile;
 
+/**
+ *  Creates archives from a list of local files.
+ *
+ * Compressor exposes the supported archive algorithms and remembers the
+ * default destination directory. Compression can use either an algorithm index
+ * or an explicit algorithm map, level, and password.
+ */
 class Compressor : public QObject
 {
     Q_OBJECT
@@ -43,6 +50,12 @@ Q_SIGNALS:
     void defaultSaveDirChanged(QString defaultSaveDir);
 };
 
+/**
+ *  Read-only MauiList containing the entries of a CompressedFile.
+ *
+ * Entries represent the archive directory selected by currentPath. The owning
+ * CompressedFile refreshes the model when navigation or archive contents change.
+ */
 class CompressedFileModel : public MauiList
 {
     Q_OBJECT
@@ -58,6 +71,14 @@ private:
     FMH::MODEL_LIST m_list;
 };
 
+/**
+ *  Opens, navigates, extracts, and modifies an archive.
+ *
+ * Setting url selects the archive. Call open() to populate model, use openDir(),
+ * goUp(), and goToRoot() to navigate its virtual directory tree, and close() to
+ * release it. Extraction and compression completion are reported asynchronously
+ * through their corresponding signals.
+ */
 class CompressedFile : public QObject
 {
     Q_OBJECT
@@ -134,6 +155,12 @@ Q_SIGNALS:
     void openedChanged(bool opened);
 };
 
+/**
+ *  Stateless archive helpers exposed as the StaticArchive QML singleton.
+ *
+ * Use isSupported() to test an archive URL and extract() for one-shot extraction
+ * when browsing the archive with CompressedFile is unnecessary.
+ */
 class StaticArchive : public QObject
 {
     Q_OBJECT

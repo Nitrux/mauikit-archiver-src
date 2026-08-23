@@ -8,12 +8,25 @@ import org.mauikit.controls as Maui
 import org.mauikit.archiver as Arc
 import org.mauikit.filebrowsing as FB
 
+/**
+ *  org.mauikit.controls.InputDialog
+ *  Collects and validates the destination for extracting an archive.
+ *
+ * The dialog suggests a folder name derived from fileUrl, allows the user to
+ * choose a destination directory, and prevents extraction into a missing base
+ * directory or an already existing target folder.
+ */
 Maui.InputDialog
 {
     id: control
 
+    /** The base directory into which the new extraction folder is created. */
     property url destination
+
+    /** The archive to extract. */
     property url fileUrl
+
+    /** An optional preferred extraction-folder name. */
     property string dirName
     readonly property string suggestedDirName: control.defaultDirectoryName(control.fileUrl, control.dirName)
     readonly property string destinationPath: control.ensureDirectoryUrl(control.destination).toString()
