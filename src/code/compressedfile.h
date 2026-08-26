@@ -168,9 +168,11 @@ class StaticArchive : public QObject
 public:
     StaticArchive(QObject * parent = nullptr);
     static StaticArchive *instance();
-    static QObject * qmlInstance(QQmlEngine *, QJSEngine *) {
+    static QObject * qmlInstance(QQmlEngine *engine, QJSEngine *scriptEngine) {
+        Q_UNUSED(scriptEngine)
 
         auto instance = StaticArchive::instance();
+        engine->setObjectOwnership(instance, QQmlEngine::CppOwnership);
         // if(engine)
         //     instance->setRootComponent(engine->rootContext().contextObject());
         // C++ and QML instance they are the same instance
