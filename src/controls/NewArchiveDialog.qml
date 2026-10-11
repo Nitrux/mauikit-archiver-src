@@ -103,7 +103,7 @@ FM.FileListingDialog
                                        control.close()
                                    }
 
-                                   Maui.App.rootComponent.notify("application-x-archive",
+                                   Maui.App.rootComponent.notify(FM.FM.getIconName(url),
                                                                  ok ? i18n("File compressed successfully") : i18n("Failed to compress"),
                                                                  control.displayPath(url),
                                                                  [_compressSuccessAction])
