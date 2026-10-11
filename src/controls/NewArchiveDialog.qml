@@ -51,7 +51,9 @@ FM.FileListingDialog
 
     persistent: false
 
-    message: i18np("Compress %1 file into a new archive", "Compress %1 files into a new archive", urls.length)
+    title: i18n("Compress")
+    template.visible: true
+    template.iconVisible: false
 
     actions:[
         Action
@@ -125,7 +127,6 @@ FM.FileListingDialog
         id: _locationField
         Layout.fillWidth: true
         Maui.Controls.title: i18n("Destination")
-        Maui.Controls.subtitle: i18n("The final location of the new archive")
         text: control.displayPath(control.destinationUrl)
 
         onTextChanged:
