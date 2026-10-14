@@ -1,5 +1,5 @@
 #include "moduleinfo.h"
-#include "../archiver_version.h"
+#include "archiver_version.h"
 
 QString MauiKitArchiver::versionString()
 {
