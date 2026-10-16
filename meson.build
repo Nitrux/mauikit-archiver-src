@@ -42,12 +42,12 @@ qml_dir = get_option('libdir') / 'qt6/qml/org/mauikit/archiver'
 install_data(configure_file(
     input: 'meson-content.in',
     output: 'qmldir',
-    configuration: {'CONTENT': ('module org.mauikit.archiver\nplugin MauiKitArchiver4plugin\n')}
+    configuration: {'CONTENT': ('module org.mauikit.archiver\ndepends org.mauikit.controls\ndepends org.mauikit.filebrowsing\nplugin MauiKitArchiver4plugin\n')}
 ), install_dir: qml_dir)
 install_subdir('src/controls', install_dir: qml_dir, strip_directory: true)
 install_headers(files('src/code/moduleinfo.h') + [archiver_export_header, archiver_version_header], subdir: 'MauiKit4/Archiver')
 pkg = import('pkgconfig')
-pkg.generate(lib, name: 'MauiKit Archiver 4', filebase: 'MauiKitArchiver4', version: meson.project_version(), description: 'MauiKit archiver library', requires: 'MauiKit4 MauiKitFileBrowsing4')
+pkg.generate(lib, name: 'MauiKit Archiver 4', filebase: 'MauiKitArchiver4', version: meson.project_version(), description: 'MauiKit archiver library', requires: 'MauiKit4 MauiKitFileBrowsing4 Qt6Core Qt6Network Qt6Qml Qt6Quick Qt6Sql KF6Archive KF6CoreAddons KF6I18n')
 
 cmake_targets = configure_file(
     input: 'meson-content.in',
@@ -57,7 +57,8 @@ if(NOT TARGET MauiKitArchiver4)
   add_library(MauiKitArchiver4 SHARED IMPORTED)
   set_target_properties(MauiKitArchiver4 PROPERTIES
     IMPORTED_LOCATION "${_MAUIKIT_PREFIX}/@LIBDIR@/libMauiKitArchiver4.so.4.0.5"
-    INTERFACE_INCLUDE_DIRECTORIES "${_MAUIKIT_PREFIX}/include/MauiKit4/Archiver")
+    INTERFACE_INCLUDE_DIRECTORIES "${_MAUIKIT_PREFIX}/include/MauiKit4/Archiver"
+    INTERFACE_LINK_LIBRARIES "Qt6::Core;Qt6::Network;Qt6::Qml;Qt6::Quick;Qt6::Sql;KF6::Archive;KF6::CoreAddons;KF6::I18n;MauiKit4;MauiKit4::FileBrowsing")
 endif()
 if(NOT TARGET MauiKit4::Archiver)
   add_library(MauiKit4::Archiver ALIAS MauiKitArchiver4)
@@ -71,7 +72,9 @@ cmake_config = configure_file(
     input: 'meson-content.in',
     output: 'MauiKitArchiver4Config.cmake',
     configuration: {'CONTENT': ('''include(CMakeFindDependencyMacro)
-find_dependency(Qt6 6.4 COMPONENTS Core)
+find_dependency(Qt6 6.4 COMPONENTS Core Network Qml Quick Sql)
+find_dependency(KF6 6.13.0 COMPONENTS Archive CoreAddons I18n)
+find_dependency(MauiKit4 4.0.5 CONFIG COMPONENTS FileBrowsing)
 include("${CMAKE_CURRENT_LIST_DIR}/MauiKitArchiver4Targets.cmake")
 set(MauiKitArchiver4_FOUND TRUE)
 ''')}
@@ -89,3 +92,20 @@ endif()
 ''')).replace('@VERSION@', (meson.project_version()))}
 )
 install_data([cmake_targets, cmake_config, cmake_version], install_dir: get_option('libdir') / 'cmake' / 'MauiKitArchiver4')
+
+translation_domain = 'mauikitarchiver'
+msgfmt = find_program('msgfmt')
+po_files = run_command('find', 'po', '-mindepth', '2', '-maxdepth', '2', '-type', 'f', '-name', translation_domain + '.po', check: true).stdout().strip().split('\n')
+foreach po_file : po_files
+    if po_file != ''
+        locale = po_file.split('/')[1]
+        custom_target(
+            'translation-' + locale,
+            input: po_file,
+            output: locale / (translation_domain + '.mo'),
+            command: [msgfmt, '--check', '-o', '@OUTPUT@', '@INPUT@'],
+            install: true,
+            install_dir: get_option('localedir') / locale / 'LC_MESSAGES',
+            install_tag: 'i18n')
+    endif
+endforeach
