@@ -47,7 +47,7 @@ install_data(configure_file(
 install_subdir('src/controls', install_dir: qml_dir, strip_directory: true)
 install_headers(files('src/code/moduleinfo.h') + [archiver_export_header, archiver_version_header], subdir: 'MauiKit4/Archiver')
 pkg = import('pkgconfig')
-pkg.generate(lib, name: 'MauiKit Archiver 4', filebase: 'MauiKitArchiver4', version: meson.project_version(), description: 'MauiKit archiver library', requires: 'MauiKit4 MauiKitFileBrowsing4 Qt6Core Qt6Network Qt6Qml Qt6Quick Qt6Sql KF6Archive KF6CoreAddons KF6I18n')
+pkg.generate(lib, name: 'MauiKit Archiver 4', filebase: 'MauiKitArchiver4', version: meson.project_version(), description: 'MauiKit archiver library', requires: 'MauiKit4 MauiKitFileBrowsing4 Qt6Core Qt6Network Qt6Qml Qt6Quick Qt6Sql')
 
 cmake_targets = configure_file(
     input: 'meson-content.in',
