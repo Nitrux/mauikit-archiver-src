@@ -106,9 +106,9 @@ msgid "Open"
 msgstr ""
 
 #: src/controls/ArchivePage.qml:226
-#, kde-format
+#, fuzzy, kde-format
 msgid "Open with"
-msgstr ""
+msgstr "Oscail le"
 
 #: src/controls/ArchivePage.qml:233
 #, kde-format

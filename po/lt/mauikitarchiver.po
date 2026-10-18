@@ -107,9 +107,9 @@ msgid "Open"
 msgstr ""
 
 #: src/controls/ArchivePage.qml:226
-#, kde-format
+#, fuzzy, kde-format
 msgid "Open with"
-msgstr ""
+msgstr "Atverti naudojant"
 
 #: src/controls/ArchivePage.qml:233
 #, kde-format
