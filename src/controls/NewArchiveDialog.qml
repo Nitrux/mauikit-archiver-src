@@ -46,6 +46,7 @@ FM.FileListingDialog
     readonly property string currentExtension: currentAlgorithm.extension ? currentAlgorithm.extension : ""
     readonly property bool encryptionAvailable: currentAlgorithm.encryptionEnabled === true
     property int compressionLevel: 0
+    property string archiveNameError: ""
 
     onDestinationChanged: destinationUrl = control.ensureDestinationUrl(destination)
 
@@ -59,7 +60,7 @@ FM.FileListingDialog
         Action
         {
             text: i18n("Cancel")
-            Maui.Controls.status: Maui.Controls.Negative
+            Maui.Controls.status: Maui.Controls.Normal
             onTriggered:
             {
                 control.clear()
@@ -115,6 +116,8 @@ FM.FileListingDialog
         id: _archiveNameField
         Layout.fillWidth: true
         Maui.Controls.title: i18n("Archive name")
+        Maui.Controls.subtitle: control.archiveNameError
+        Maui.Controls.status: control.archiveNameError.length > 0 ? Maui.Controls.Negative : Maui.Controls.Normal
 
         onTextChanged:
         {
@@ -293,6 +296,7 @@ FM.FileListingDialog
 
     function checkExistance(name, path, extension)
     {
+        control.archiveNameError = ""
         if(!control.hasAvailableAlgorithms || extension.length === 0)
         {
             control.alert(i18n("No supported compression tools were found in PATH."), 2)
@@ -309,7 +313,7 @@ FM.FileListingDialog
 
         if(name.length === 0)
         {
-            control.alert(i18n("File name cannot be empty."), 2)
+            control.archiveNameError = i18n("Archive name cannot be empty.")
             return false
         }
 
@@ -318,7 +322,7 @@ FM.FileListingDialog
 
         if(exists)
         {
-            control.alert(i18n("File already exists. Try with another name."), 1)
+            control.archiveNameError = i18n("Archive already exists. Try with another name.")
             return false
         }
 
@@ -335,6 +339,7 @@ FM.FileListingDialog
     function clear()
     {
         _archiveNameField.clear()
+        control.archiveNameError = ""
         control.resetEncryption()
         control.urls = []
     }
